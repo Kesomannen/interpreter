@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
 
-        match executor.evaluate(&input) {
+        match executor.eval(&input) {
             Ok(value) => {
                 if let Value::Void = value {
                     continue;

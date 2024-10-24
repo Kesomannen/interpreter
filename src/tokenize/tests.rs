@@ -18,11 +18,29 @@ fn check_tokenize_string() {
 }
 
 #[test]
+fn check_tokenize_int() {
+    assert_tokenize("42", [TokenKind::Int(42)]);
+}
+
+#[test]
 fn check_tokenize_symbols() {
-    assert_tokenize("(", [TokenKind::OpenParen]);
-    assert_tokenize(")", [TokenKind::CloseParen]);
     assert_tokenize(";", [TokenKind::Semicolon]);
     assert_tokenize(",", [TokenKind::Comma]);
+    assert_tokenize("=", [TokenKind::Equals]);
+}
+
+#[test]
+fn check_tokenize_delims() {
+    assert_tokenize("(", [TokenKind::OpenDelim(Delim::Paren)]);
+    assert_tokenize(")", [TokenKind::CloseDelim(Delim::Paren)]);
+}
+
+#[test]
+fn check_tokenize_bin_operators() {
+    assert_tokenize("+", [TokenKind::BinOperator(BinOperator::Add)]);
+    assert_tokenize("-", [TokenKind::BinOperator(BinOperator::Sub)]);
+    assert_tokenize("*", [TokenKind::BinOperator(BinOperator::Mul)]);
+    assert_tokenize("/", [TokenKind::BinOperator(BinOperator::Div)]);
 }
 
 fn assert_tokenize(src: &str, expected: impl IntoIterator<Item = TokenKind>) {

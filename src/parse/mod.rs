@@ -8,7 +8,7 @@ pub use error::{Error, Result};
 
 use crate::{
     span::Span,
-    tokenize::{self, Token, TokenKind},
+    tokenize::{self, BinOperator, Delim, Token, TokenKind},
 };
 
 #[cfg(test)]
@@ -80,19 +80,18 @@ where
 
     fn parse_value_list<F, U>(
         &mut self,
-        start: TokenKind,
+        delim: Delim,
         sep: TokenKind,
-        end: TokenKind,
         mut parse: F,
     ) -> Result<(Vec<U>, Span)>
     where
         F: FnMut(&mut Self) -> Result<U>,
     {
-        let start_loc = self.expect(&start)?.span.start;
+        let start = self.expect(&TokenKind::OpenDelim(delim))?.span.start;
         let mut values = Vec::new();
 
-        let end_loc = loop {
-            if self.peek()?.kind == end {
+        let end = loop {
+            if self.peek()?.kind == TokenKind::CloseDelim(delim) {
                 break self.next()?.span.end;
             }
 
@@ -103,11 +102,47 @@ where
             values.push(parse(self)?);
         };
 
-        let span = Span::new(start_loc, end_loc);
+        let span = Span::new(start, end);
         Ok((values, span))
     }
 
     fn parse_expr(&mut self) -> Result<Expr> {
+        self._parse_expr(0)
+    }
+
+    fn _parse_expr(&mut self, precedence: usize) -> Result<Expr> {
+        let mut lhs = self.parse_simple_expr()?;
+
+        loop {
+            let Some(next) = self.peek_ok()? else { break };
+            let TokenKind::BinOperator(operator) = next.kind else {
+                break;
+            };
+
+            if operator.precedence() < precedence {
+                break;
+            }
+
+            self.next()?;
+
+            let rhs = self._parse_expr(operator.precedence() + 1)?;
+            let span = Span::merge(lhs.span.clone(), rhs.span.clone());
+
+            lhs = Expr {
+                id: self.next_id(),
+                span,
+                kind: ExprKind::BinOp(BinOp {
+                    operator,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                }),
+            };
+        }
+
+        Ok(lhs)
+    }
+
+    fn parse_simple_expr(&mut self) -> Result<Expr> {
         let id = self.next_id();
 
         let Token {
@@ -117,18 +152,30 @@ where
 
         let kind = match token_kind {
             TokenKind::String(str) => ExprKind::String(str),
-            TokenKind::Ident(name) => {
-                let (args, args_span) = self.parse_value_list(
-                    TokenKind::OpenParen,
-                    TokenKind::Comma,
-                    TokenKind::CloseParen,
-                    |this| this.parse_expr(),
-                )?;
+            TokenKind::Int(int) => ExprKind::Int(int),
+            TokenKind::Ident(name) => match self.peek_ok()?.map(|token| &token.kind) {
+                Some(TokenKind::OpenDelim(Delim::Paren)) => {
+                    let (args, args_span) =
+                        self.parse_value_list(Delim::Paren, TokenKind::Comma, |this| {
+                            this.parse_expr()
+                        })?;
 
-                span.extend_with(args_span);
+                    span.extend_with(&args_span);
 
-                ExprKind::Call(Call { name, args })
-            }
+                    ExprKind::Call(Call { name, args })
+                }
+                Some(TokenKind::Equals) => {
+                    self.next().unwrap();
+
+                    let value = self.parse_expr()?;
+                    span.extend_with(&value.span);
+                    ExprKind::Assign(Assign {
+                        name,
+                        value: Box::new(value),
+                    })
+                }
+                _ => ExprKind::Var(name),
+            },
             _ => {
                 return Err(Error::UnexpectedToken {
                     expected: "expression".into(),
@@ -138,5 +185,14 @@ where
         };
 
         Ok(Expr { id, span, kind })
+    }
+}
+
+impl BinOperator {
+    pub fn precedence(&self) -> usize {
+        match self {
+            Self::Add | Self::Sub => 1,
+            Self::Mul | Self::Div => 2,
+        }
     }
 }

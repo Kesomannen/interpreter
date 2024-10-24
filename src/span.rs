@@ -16,7 +16,7 @@ impl Span {
         }
     }
 
-    pub fn extend_with(&mut self, other: Span) {
+    pub fn extend_with(&mut self, other: &Span) {
         self.end = other.end;
     }
 

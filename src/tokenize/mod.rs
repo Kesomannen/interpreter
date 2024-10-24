@@ -3,6 +3,7 @@ use std::{iter::Peekable, str::Chars};
 use crate::span::Span;
 
 mod error;
+use derive_more::derive::Display;
 pub use error::{Error, Result};
 
 #[cfg(test)]
@@ -18,10 +19,30 @@ pub struct Token {
 pub enum TokenKind {
     Ident(String),
     String(String),
-    OpenParen,
-    CloseParen,
+    Int(i32),
+    OpenDelim(Delim),
+    CloseDelim(Delim),
+    BinOperator(BinOperator),
     Semicolon,
+    Equals,
     Comma,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Delim {
+    Paren,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
+pub enum BinOperator {
+    #[display("add")]
+    Add,
+    #[display("subtract")]
+    Sub,
+    #[display("multiply")]
+    Mul,
+    #[display("divide")]
+    Div,
 }
 
 pub struct Tokenizer<'a> {
@@ -68,23 +89,42 @@ impl<'a> Iterator for Tokenizer<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let start = self.loc;
 
-        let next = self.next()?;
+        loop {
+            if !self.chars.peek()?.is_whitespace() {
+                break;
+            }
 
-        let kind = match next {
-            '(' => TokenKind::OpenParen,
-            ')' => TokenKind::CloseParen,
+            self.next().unwrap();
+        }
+
+        let kind = match self.next().unwrap() {
             ';' => TokenKind::Semicolon,
             ',' => TokenKind::Comma,
+            '=' => TokenKind::Equals,
+            '(' => TokenKind::OpenDelim(Delim::Paren),
+            ')' => TokenKind::CloseDelim(Delim::Paren),
+            '+' => TokenKind::BinOperator(BinOperator::Add),
+            '-' => TokenKind::BinOperator(BinOperator::Sub),
+            '*' => TokenKind::BinOperator(BinOperator::Mul),
+            '/' => TokenKind::BinOperator(BinOperator::Div),
             '"' => {
                 let str = self.collect_while(None, |c| c != '"');
                 self.next(); // eat the close "
                 TokenKind::String(str)
             }
+            c if c.is_numeric() => {
+                let str = self.collect_while(Some(c), |c| c.is_numeric());
+                let int = match str.parse() {
+                    Ok(int) => int,
+                    Err(err) => return Some(Err(Error::InvalidNumber(str, err))),
+                };
+                TokenKind::Int(int)
+            }
             c if is_valid_ident(c) => {
                 let ident = self.collect_while(Some(c), is_valid_ident);
                 TokenKind::Ident(ident)
             }
-            _ => return Some(Err(Error::UnexpectedChar(next, start))),
+            c => return Some(Err(Error::UnexpectedChar(c, start))),
         };
 
         let span = Span::new(start, self.loc);
@@ -93,5 +133,5 @@ impl<'a> Iterator for Tokenizer<'a> {
 }
 
 fn is_valid_ident(c: char) -> bool {
-    !matches!(c, '(' | ')' | ';' | '"')
+    !c.is_whitespace() && !c.is_ascii_punctuation()
 }

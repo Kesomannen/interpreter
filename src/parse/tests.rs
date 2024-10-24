@@ -1,6 +1,6 @@
 use crate::span::Span;
 use std::fmt::Debug;
-use tokenize::TokenKind;
+use tokenize::{BinOperator, Delim, TokenKind};
 
 use super::*;
 
@@ -21,6 +21,22 @@ fn check_parse_string() {
 }
 
 #[test]
+fn check_parse_int() {
+    assert_parse(
+        [Token {
+            span: Span::new(0, 3),
+            kind: TokenKind::Int(123),
+        }],
+        |parser| parser.parse_expr(),
+        Expr {
+            id: NodeId(0),
+            span: Span::new(0, 3),
+            kind: ExprKind::Int(123),
+        },
+    );
+}
+
+#[test]
 fn check_parse_call() {
     assert_parse(
         [
@@ -30,7 +46,7 @@ fn check_parse_call() {
             },
             Token {
                 span: Span::new(5, 6),
-                kind: TokenKind::OpenParen,
+                kind: TokenKind::OpenDelim(Delim::Paren),
             },
             Token {
                 span: Span::new(6, 17),
@@ -38,7 +54,7 @@ fn check_parse_call() {
             },
             Token {
                 span: Span::new(17, 18),
-                kind: TokenKind::CloseParen,
+                kind: TokenKind::CloseDelim(Delim::Paren),
             },
         ],
         |parser| parser.parse_expr(),
@@ -52,6 +68,113 @@ fn check_parse_call() {
                     span: Span::new(6, 17),
                     kind: ExprKind::String("hello, world".into()),
                 }],
+            }),
+        },
+    );
+}
+
+#[test]
+fn check_parse_assign() {
+    assert_parse(
+        [
+            Token {
+                span: Span::new(0, 3),
+                kind: TokenKind::Ident("foo".into()),
+            },
+            Token {
+                span: Span::new(3, 4),
+                kind: TokenKind::Equals,
+            },
+            Token {
+                span: Span::new(4, 5),
+                kind: TokenKind::Int(7),
+            },
+        ],
+        |parser| parser.parse_expr(),
+        Expr {
+            id: NodeId(0),
+            span: Span::new(0, 5),
+            kind: ExprKind::Assign(Assign {
+                name: "foo".into(),
+                value: Box::new(Expr {
+                    id: NodeId(1),
+                    span: Span::new(4, 5),
+                    kind: ExprKind::Int(7),
+                }),
+            }),
+        },
+    );
+}
+
+#[test]
+fn check_parse_var() {
+    assert_parse(
+        [Token {
+            span: Span::new(0, 7),
+            kind: TokenKind::Ident("foo_bar".into()),
+        }],
+        |parser| parser.parse_expr(),
+        Expr {
+            id: NodeId(0),
+            span: Span::new(0, 7),
+            kind: ExprKind::Var("foo_bar".into()),
+        },
+    );
+}
+
+#[test]
+fn check_parse_binop() {
+    assert_parse(
+        [
+            Token {
+                span: Span::new(0, 2),
+                kind: TokenKind::Int(20),
+            },
+            Token {
+                span: Span::new(2, 3),
+                kind: TokenKind::BinOperator(BinOperator::Sub),
+            },
+            Token {
+                span: Span::new(3, 5),
+                kind: TokenKind::Int(15),
+            },
+            Token {
+                span: Span::new(5, 6),
+                kind: TokenKind::BinOperator(BinOperator::Div),
+            },
+            Token {
+                span: Span::new(6, 7),
+                kind: TokenKind::Int(3),
+            },
+        ],
+        |parser| parser.parse_expr(),
+        Expr {
+            id: NodeId(4),
+            span: Span::new(0, 7),
+            kind: ExprKind::BinOp(BinOp {
+                operator: BinOperator::Sub,
+                lhs: Box::new(Expr {
+                    id: NodeId(0),
+                    span: Span::new(0, 2),
+                    kind: ExprKind::Int(20),
+                }),
+                rhs: Box::new(Expr {
+                    id: NodeId(3),
+                    span: Span::new(3, 7),
+                    kind: ExprKind::BinOp(BinOp {
+                        operator: BinOperator::Div,
+                        lhs: Box::new(Expr {
+                            id: NodeId(1),
+                            span: Span::new(3, 5),
+                            kind: ExprKind::Int(15),
+                        }),
+                        rhs: Box::new(Expr {
+                            id: NodeId(2),
+                            span: Span::new(6, 7),
+                            kind: ExprKind::Int(3),
+                        }),
+                    }),
+                }),
             }),
         },
     );
