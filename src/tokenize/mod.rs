@@ -1,10 +1,14 @@
-use std::{iter::Peekable, str::Chars};
+use std::{
+    iter::Peekable,
+    str::{Chars, FromStr},
+};
 
 use crate::span::Span;
 
 mod error;
 use derive_more::derive::Display;
 pub use error::{Error, Result};
+use strum_macros::EnumString;
 
 #[cfg(test)]
 mod tests;
@@ -20,6 +24,7 @@ pub enum TokenKind {
     Ident(String),
     String(String),
     Int(i32),
+    Keyword(Keyword),
     OpenDelim(Delim),
     CloseDelim(Delim),
     BinOperator(BinOperator),
@@ -43,6 +48,17 @@ pub enum BinOperator {
     Mul,
     #[display("divide")]
     Div,
+    #[display("or")]
+    Or,
+    #[display("and")]
+    And,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, EnumString)]
+#[strum(serialize_all = "camelCase")]
+pub enum Keyword {
+    True,
+    False,
 }
 
 pub struct Tokenizer<'a> {
@@ -107,6 +123,7 @@ impl<'a> Iterator for Tokenizer<'a> {
             '-' => TokenKind::BinOperator(BinOperator::Sub),
             '*' => TokenKind::BinOperator(BinOperator::Mul),
             '/' => TokenKind::BinOperator(BinOperator::Div),
+            '&' => {}
             '"' => {
                 let str = self.collect_while(None, |c| c != '"');
                 self.next(); // eat the close "
@@ -122,7 +139,11 @@ impl<'a> Iterator for Tokenizer<'a> {
             }
             c if is_valid_ident(c) => {
                 let ident = self.collect_while(Some(c), is_valid_ident);
-                TokenKind::Ident(ident)
+
+                match Keyword::from_str(&ident) {
+                    Ok(keyword) => TokenKind::Keyword(keyword),
+                    Err(_) => TokenKind::Ident(ident),
+                }
             }
             c => return Some(Err(Error::UnexpectedChar(c, start))),
         };
@@ -133,5 +154,5 @@ impl<'a> Iterator for Tokenizer<'a> {
 }
 
 fn is_valid_ident(c: char) -> bool {
-    !c.is_whitespace() && !c.is_ascii_punctuation()
+    !c.is_whitespace() && (c == '_' || !c.is_ascii_punctuation())
 }

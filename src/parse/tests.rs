@@ -1,6 +1,6 @@
 use crate::span::Span;
 use std::fmt::Debug;
-use tokenize::{BinOperator, Delim, TokenKind};
+use tokenize::{BinOperator, Delim, Keyword, TokenKind};
 
 use super::*;
 
@@ -32,6 +32,35 @@ fn check_parse_int() {
             id: NodeId(0),
             span: Span::new(0, 3),
             kind: ExprKind::Int(123),
+        },
+    );
+}
+
+#[test]
+fn check_parse_bool() {
+    assert_parse(
+        [Token {
+            span: Span::new(0, 4),
+            kind: TokenKind::Keyword(Keyword::True),
+        }],
+        |parser| parser.parse_expr(),
+        Expr {
+            id: NodeId(0),
+            span: Span::new(0, 4),
+            kind: ExprKind::Bool(true),
+        },
+    );
+
+    assert_parse(
+        [Token {
+            span: Span::new(0, 5),
+            kind: TokenKind::Keyword(Keyword::False),
+        }],
+        |parser| parser.parse_expr(),
+        Expr {
+            id: NodeId(0),
+            span: Span::new(0, 5),
+            kind: ExprKind::Bool(false),
         },
     );
 }

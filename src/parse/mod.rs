@@ -8,7 +8,7 @@ pub use error::{Error, Result};
 
 use crate::{
     span::Span,
-    tokenize::{self, BinOperator, Delim, Token, TokenKind},
+    tokenize::{self, BinOperator, Delim, Keyword, Token, TokenKind},
 };
 
 #[cfg(test)]
@@ -153,6 +153,8 @@ where
         let kind = match token_kind {
             TokenKind::String(str) => ExprKind::String(str),
             TokenKind::Int(int) => ExprKind::Int(int),
+            TokenKind::Keyword(Keyword::True) => ExprKind::Bool(true),
+            TokenKind::Keyword(Keyword::False) => ExprKind::Bool(false),
             TokenKind::Ident(name) => match self.peek_ok()?.map(|token| &token.kind) {
                 Some(TokenKind::OpenDelim(Delim::Paren)) => {
                     let (args, args_span) =
@@ -191,8 +193,10 @@ where
 impl BinOperator {
     pub fn precedence(&self) -> usize {
         match self {
-            Self::Add | Self::Sub => 1,
-            Self::Mul | Self::Div => 2,
+            Self::Or => 1,
+            Self::And => 2,
+            Self::Add | Self::Sub => 2,
+            Self::Mul | Self::Div => 3,
         }
     }
 }

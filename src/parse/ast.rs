@@ -14,6 +14,7 @@ pub struct Expr {
 pub enum ExprKind {
     String(String),
     Int(i32),
+    Bool(bool),
     Call(Call),
     BinOp(BinOp),
     Assign(Assign),

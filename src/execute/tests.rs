@@ -26,7 +26,28 @@ fn check_eval_int() {
 }
 
 #[test]
-fn check_eval_binop() {
+fn check_eval_bool() {
+    assert_eval(
+        Expr {
+            id: NodeId(0),
+            span: Span::default(),
+            kind: ExprKind::Bool(true),
+        },
+        Value::Bool(true),
+    );
+
+    assert_eval(
+        Expr {
+            id: NodeId(0),
+            span: Span::default(),
+            kind: ExprKind::Bool(false),
+        },
+        Value::Bool(false),
+    );
+}
+
+#[test]
+fn check_eval_int_binop() {
     assert_eval(
         Expr {
             id: NodeId(4),
@@ -58,6 +79,30 @@ fn check_eval_binop() {
             }),
         },
         Value::Int(15),
+    );
+}
+
+#[test]
+fn check_eval_str_binop() {
+    assert_eval(
+        Expr {
+            id: NodeId(2),
+            span: Span::new(0, 6),
+            kind: ExprKind::BinOp(BinOp {
+                operator: BinOperator::Add,
+                lhs: Box::new(Expr {
+                    id: NodeId(0),
+                    span: Span::new(0, 3),
+                    kind: ExprKind::String("foo".into()),
+                }),
+                rhs: Box::new(Expr {
+                    id: NodeId(1),
+                    span: Span::new(3, 6),
+                    kind: ExprKind::String(" bar".into()),
+                }),
+            }),
+        },
+        Value::String("foo bar".into()),
     );
 }
 

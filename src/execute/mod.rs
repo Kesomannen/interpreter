@@ -33,6 +33,7 @@ impl Executor {
         match kind {
             ExprKind::String(str) => Ok(Value::String(str)),
             ExprKind::Int(int) => Ok(Value::Int(int)),
+            ExprKind::Bool(bool) => Ok(Value::Bool(bool)),
             ExprKind::Call(call) => self.eval_call(call, span),
             ExprKind::BinOp(bin_op) => self.eval_bin_op(bin_op, span),
             ExprKind::Assign(assign) => self.eval_assign(assign),
@@ -76,12 +77,10 @@ impl Executor {
         let rhs = self.eval_expr(*rhs)?;
 
         let value = match (operator, lhs, rhs) {
-            (operator, Value::Int(lhs), Value::Int(rhs)) => Value::Int(match operator {
-                BinOperator::Add => lhs + rhs,
-                BinOperator::Sub => lhs - rhs,
-                BinOperator::Mul => lhs * rhs,
-                BinOperator::Div => lhs / rhs,
-            }),
+            (BinOperator::Add, Value::Int(lhs), Value::Int(rhs)) => Value::Int(lhs + rhs),
+            (BinOperator::Sub, Value::Int(lhs), Value::Int(rhs)) => Value::Int(lhs + -rhs),
+            (BinOperator::Mul, Value::Int(lhs), Value::Int(rhs)) => Value::Int(lhs * rhs),
+            (BinOperator::Div, Value::Int(lhs), Value::Int(rhs)) => Value::Int(lhs / rhs),
             (BinOperator::Add, Value::String(lhs), Value::String(rhs)) => Value::String(lhs + &rhs),
             (operator, lhs, rhs) => {
                 return Err(Error::UnsupportedOp {
@@ -118,6 +117,8 @@ pub enum Type {
     String,
     #[display("int")]
     Int,
+    #[display("bool")]
+    Bool,
 }
 
 #[derive(Debug, Clone, Display, PartialEq)]
@@ -126,6 +127,7 @@ pub enum Value {
     #[display("\"{_0}\"")]
     String(String),
     Int(i32),
+    Bool(bool),
 }
 
 impl Value {
@@ -134,6 +136,7 @@ impl Value {
             Value::Void => Type::Void,
             Value::String(_) => Type::String,
             Value::Int(_) => Type::Int,
+            Value::Bool(_) => Type::Bool,
         }
     }
 }

@@ -23,6 +23,12 @@ fn check_tokenize_int() {
 }
 
 #[test]
+fn check_tokenize_bool() {
+    assert_tokenize("true", [TokenKind::Keyword(Keyword::True)]);
+    assert_tokenize("false", [TokenKind::Keyword(Keyword::False)]);
+}
+
+#[test]
 fn check_tokenize_symbols() {
     assert_tokenize(";", [TokenKind::Semicolon]);
     assert_tokenize(",", [TokenKind::Comma]);
