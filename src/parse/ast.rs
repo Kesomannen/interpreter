@@ -19,6 +19,8 @@ pub enum ExprKind {
     BinOp(BinOp),
     Assign(Assign),
     Var(String),
+    If(If),
+    Block(Block),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -39,3 +41,12 @@ pub struct Assign {
     pub name: String,
     pub value: Box<Expr>,
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct If {
+    pub cond: Box<Expr>,
+    pub body: Box<Expr>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Block(pub Vec<Expr>);

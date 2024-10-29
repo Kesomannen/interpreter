@@ -12,13 +12,16 @@ pub enum Error {
     #[error("undefined variable: {0}")]
     UndefinedVariable(String, Span),
 
-    #[error("type mismatch: expected a value of type {expected}, got '{actual}'")]
+    #[error("type mismatch: expected a value of type {expected}, got {}", actual.ty())]
     TypeMismatch { expected: Type, actual: Value },
 
-    #[error("argument mismatch: expected {expected} argument(s), got {actual}")]
+    #[error(
+        "argument mismatch: expected {expected} {}, got {actual}",
+        if *expected == 1 { "argument" } else { "arguments" }
+    )]
     ArgumentMismatch { expected: usize, actual: usize },
 
-    #[error("unsupported operation: cannot {operator} {lhs} and {rhs}")]
+    #[error("unsupported operation: cannot {} {lhs} and {rhs}", operator.verb())]
     UnsupportedOp {
         lhs: Type,
         rhs: Type,

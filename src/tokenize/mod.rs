@@ -13,52 +13,102 @@ use strum_macros::EnumString;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Display)]
+#[display("{}", kind)]
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Display)]
 pub enum TokenKind {
     Ident(String),
     String(String),
     Int(i32),
     Keyword(Keyword),
+    #[display("{}", _0.to_str(true))]
     OpenDelim(Delim),
+    #[display("{}", _0.to_str(false))]
     CloseDelim(Delim),
     BinOperator(BinOperator),
+    #[display(";")]
     Semicolon,
+    #[display("=")]
     Equals,
+    #[display(",")]
     Comma,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Delim {
     Paren,
+    Brace,
+}
+
+impl Delim {
+    pub fn to_str(self, open: bool) -> &'static str {
+        match (self, open) {
+            (Delim::Paren, true) => "(",
+            (Delim::Paren, false) => ")",
+            (Delim::Brace, true) => "{",
+            (Delim::Brace, false) => "}",
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
 pub enum BinOperator {
-    #[display("add")]
+    #[display("+")]
     Add,
-    #[display("subtract")]
+    #[display("-")]
     Sub,
-    #[display("multiply")]
+    #[display("*")]
     Mul,
-    #[display("divide")]
+    #[display("/")]
     Div,
-    #[display("or")]
+    #[display("||")]
     Or,
-    #[display("and")]
+    #[display("&&")]
     And,
+    #[display("==")]
+    Eq,
+    #[display("!=")]
+    Ne,
+    #[display(">")]
+    Gt,
+    #[display(">=")]
+    Gte,
+    #[display("<")]
+    Lt,
+    #[display("<=")]
+    Lte,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, EnumString)]
+impl BinOperator {
+    pub fn verb(&self) -> &'static str {
+        match self {
+            BinOperator::Add => "add",
+            BinOperator::Sub => "subtract",
+            BinOperator::Mul => "multiply",
+            BinOperator::Div => "divide",
+            BinOperator::Or => "or",
+            BinOperator::And => "and",
+            BinOperator::Eq
+            | BinOperator::Ne
+            | BinOperator::Gt
+            | BinOperator::Gte
+            | BinOperator::Lt
+            | BinOperator::Lte => "compare",
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, EnumString, strum_macros::Display)]
 #[strum(serialize_all = "camelCase")]
 pub enum Keyword {
     True,
     False,
+    If,
 }
 
 pub struct Tokenizer<'a> {
@@ -74,9 +124,9 @@ pub fn tokenize(src: &str) -> Tokenizer<'_> {
 }
 
 impl<'a> Tokenizer<'a> {
-    fn next(&mut self) -> Option<char> {
-        self.chars.next().inspect(|_| {
-            self.loc += 1;
+    fn next_char(&mut self) -> Option<char> {
+        self.chars.next().inspect(|c| {
+            self.loc += c.len_utf8();
         })
     }
 
@@ -92,7 +142,7 @@ impl<'a> Tokenizer<'a> {
                 break;
             }
 
-            buf.push(self.next().unwrap());
+            buf.push(self.next_char().unwrap());
         }
 
         buf
@@ -110,26 +160,57 @@ impl<'a> Iterator for Tokenizer<'a> {
                 break;
             }
 
-            self.next().unwrap();
+            self.next_char().unwrap();
         }
 
-        let kind = match self.next().unwrap() {
-            ';' => TokenKind::Semicolon,
-            ',' => TokenKind::Comma,
-            '=' => TokenKind::Equals,
-            '(' => TokenKind::OpenDelim(Delim::Paren),
-            ')' => TokenKind::CloseDelim(Delim::Paren),
-            '+' => TokenKind::BinOperator(BinOperator::Add),
-            '-' => TokenKind::BinOperator(BinOperator::Sub),
-            '*' => TokenKind::BinOperator(BinOperator::Mul),
-            '/' => TokenKind::BinOperator(BinOperator::Div),
-            '&' => {}
-            '"' => {
+        let kind = match (self.next_char().unwrap(), self.chars.peek()) {
+            ('/', Some('/')) => {
+                self.collect_while(None, |c| c != '\n');
+                return self.next();
+            }
+            (';', _) => TokenKind::Semicolon,
+            (',', _) => TokenKind::Comma,
+            ('(', _) => TokenKind::OpenDelim(Delim::Paren),
+            (')', _) => TokenKind::CloseDelim(Delim::Paren),
+            ('{', _) => TokenKind::OpenDelim(Delim::Brace),
+            ('}', _) => TokenKind::CloseDelim(Delim::Brace),
+            ('+', _) => TokenKind::BinOperator(BinOperator::Add),
+            ('-', _) => TokenKind::BinOperator(BinOperator::Sub),
+            ('*', _) => TokenKind::BinOperator(BinOperator::Mul),
+            ('/', _) => TokenKind::BinOperator(BinOperator::Div),
+            ('=', Some('=')) => {
+                self.next_char();
+                TokenKind::BinOperator(BinOperator::Eq)
+            }
+            ('!', Some('=')) => {
+                self.next_char();
+                TokenKind::BinOperator(BinOperator::Ne)
+            }
+            ('=', _) => TokenKind::Equals,
+            ('<', Some('=')) => {
+                self.next_char();
+                TokenKind::BinOperator(BinOperator::Lte)
+            }
+            ('<', _) => TokenKind::BinOperator(BinOperator::Lt),
+            ('>', Some('=')) => {
+                self.next_char();
+                TokenKind::BinOperator(BinOperator::Gte)
+            }
+            ('>', _) => TokenKind::BinOperator(BinOperator::Gt),
+            ('&', Some('&')) => {
+                self.next_char();
+                TokenKind::BinOperator(BinOperator::And)
+            }
+            ('|', Some('|')) => {
+                self.next_char();
+                TokenKind::BinOperator(BinOperator::Or)
+            }
+            ('"', _) => {
                 let str = self.collect_while(None, |c| c != '"');
-                self.next(); // eat the close "
+                self.next_char(); // eat the close "
                 TokenKind::String(str)
             }
-            c if c.is_numeric() => {
+            (c, _) if c.is_numeric() => {
                 let str = self.collect_while(Some(c), |c| c.is_numeric());
                 let int = match str.parse() {
                     Ok(int) => int,
@@ -137,7 +218,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                 };
                 TokenKind::Int(int)
             }
-            c if is_valid_ident(c) => {
+            (c, _) if is_valid_ident(c) => {
                 let ident = self.collect_while(Some(c), is_valid_ident);
 
                 match Keyword::from_str(&ident) {
@@ -145,7 +226,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                     Err(_) => TokenKind::Ident(ident),
                 }
             }
-            c => return Some(Err(Error::UnexpectedChar(c, start))),
+            (c, _) => return Some(Err(Error::UnexpectedChar(c, start))),
         };
 
         let span = Span::new(start, self.loc);

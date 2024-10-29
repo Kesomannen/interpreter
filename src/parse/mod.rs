@@ -16,18 +16,6 @@ mod tests;
 
 type TokenResult = tokenize::Result<Token>;
 
-pub fn parse<T>(tokens: T) -> Result<Expr>
-where
-    T: Iterator<Item = TokenResult>,
-{
-    let mut parser = Parser {
-        node_id: 0,
-        tokens: tokens.peekable(),
-    };
-
-    parser.parse_expr()
-}
-
 pub struct Parser<T>
 where
     T: Iterator<Item = TokenResult>,
@@ -40,6 +28,13 @@ impl<T> Parser<T>
 where
     T: Iterator<Item = TokenResult>,
 {
+    pub fn new(tokens: T) -> Self {
+        Parser {
+            node_id: 0,
+            tokens: tokens.peekable(),
+        }
+    }
+
     fn next_id(&mut self) -> NodeId {
         self.node_id += 1;
         NodeId(self.node_id - 1)
@@ -72,13 +67,13 @@ where
             Ok(next)
         } else {
             Err(Error::UnexpectedToken {
-                expected: format!("{kind:?}").into(),
+                expected: format!("'{kind}'").into(),
                 actual: next,
             })
         }
     }
 
-    fn parse_value_list<F, U>(
+    fn parse_list<F, U>(
         &mut self,
         delim: Delim,
         sep: TokenKind,
@@ -91,12 +86,26 @@ where
         let mut values = Vec::new();
 
         let end = loop {
-            if self.peek()?.kind == TokenKind::CloseDelim(delim) {
-                break self.next()?.span.end;
-            }
+            if values.is_empty() {
+                if self.peek()?.kind == TokenKind::CloseDelim(delim) {
+                    break self.next().unwrap().span.end;
+                }
+            } else {
+                let next = self.next()?;
 
-            if !values.is_empty() {
-                self.expect(&sep)?;
+                if next.kind == TokenKind::CloseDelim(delim) {
+                    break next.span.end;
+                } else if next.kind == sep {
+                    // allow trailing separators
+                    if self.peek()?.kind == TokenKind::CloseDelim(delim) {
+                        break self.next().unwrap().span.end;
+                    }
+                } else {
+                    return Err(Error::UnexpectedToken {
+                        expected: format!("'{}' or '{}'", delim.to_str(false), sep).into(),
+                        actual: next,
+                    });
+                }
             }
 
             values.push(parse(self)?);
@@ -106,7 +115,14 @@ where
         Ok((values, span))
     }
 
-    fn parse_expr(&mut self) -> Result<Expr> {
+    pub fn parse_block(&mut self) -> Result<(Block, Span)> {
+        let (exprs, span) =
+            self.parse_list(Delim::Brace, TokenKind::Semicolon, |this| this.parse_expr())?;
+
+        Ok((Block(exprs), span))
+    }
+
+    pub fn parse_expr(&mut self) -> Result<Expr> {
         self._parse_expr(0)
     }
 
@@ -145,46 +161,91 @@ where
     fn parse_simple_expr(&mut self) -> Result<Expr> {
         let id = self.next_id();
 
-        let Token {
-            kind: token_kind,
-            mut span,
-        } = self.next()?;
+        let Token { kind, span } = self.peek()?;
+        let mut span = span.clone();
 
-        let kind = match token_kind {
-            TokenKind::String(str) => ExprKind::String(str),
-            TokenKind::Int(int) => ExprKind::Int(int),
-            TokenKind::Keyword(Keyword::True) => ExprKind::Bool(true),
-            TokenKind::Keyword(Keyword::False) => ExprKind::Bool(false),
-            TokenKind::Ident(name) => match self.peek_ok()?.map(|token| &token.kind) {
-                Some(TokenKind::OpenDelim(Delim::Paren)) => {
-                    let (args, args_span) =
-                        self.parse_value_list(Delim::Paren, TokenKind::Comma, |this| {
-                            this.parse_expr()
-                        })?;
+        enum Eat {
+            Yes,
+            No,
+        }
 
-                    span.extend_with(&args_span);
-
-                    ExprKind::Call(Call { name, args })
-                }
-                Some(TokenKind::Equals) => {
-                    self.next().unwrap();
-
-                    let value = self.parse_expr()?;
-                    span.extend_with(&value.span);
-                    ExprKind::Assign(Assign {
-                        name,
-                        value: Box::new(value),
-                    })
-                }
-                _ => ExprKind::Var(name),
+        let (kind, eat) = match kind {
+            TokenKind::Int(int) => (ExprKind::Int(*int), Eat::Yes),
+            TokenKind::Keyword(Keyword::True) => (ExprKind::Bool(true), Eat::Yes),
+            TokenKind::Keyword(Keyword::False) => (ExprKind::Bool(false), Eat::Yes),
+            TokenKind::String(_) => match self.next().map(|token| token.kind) {
+                Ok(TokenKind::String(str)) => (ExprKind::String(str), Eat::No),
+                _ => unreachable!(),
             },
+            TokenKind::Keyword(Keyword::If) => {
+                self.next().unwrap();
+
+                self.expect(&TokenKind::OpenDelim(Delim::Paren))?;
+
+                let cond = Box::new(self.parse_expr()?);
+
+                self.expect(&TokenKind::CloseDelim(Delim::Paren))?;
+
+                let body = Box::new(self.parse_expr()?);
+
+                span.extend_with(&body.span);
+
+                (ExprKind::If(If { cond, body }), Eat::No)
+            }
+            TokenKind::OpenDelim(Delim::Brace) => {
+                let (block, block_span) = self.parse_block()?;
+
+                span.extend_with(&block_span);
+
+                (ExprKind::Block(block), Eat::No)
+            }
+            TokenKind::Ident(_) => {
+                let name = match self.next().map(|token| token.kind) {
+                    Ok(TokenKind::Ident(name)) => name,
+                    _ => unreachable!(),
+                };
+
+                let kind = match self.peek_ok()?.map(|token| &token.kind) {
+                    Some(TokenKind::OpenDelim(Delim::Paren)) => {
+                        let (args, args_span) =
+                            self.parse_list(Delim::Paren, TokenKind::Comma, |this| {
+                                this.parse_expr()
+                            })?;
+
+                        span.extend_with(&args_span);
+
+                        ExprKind::Call(Call { name, args })
+                    }
+                    Some(TokenKind::Equals) => {
+                        self.next().unwrap();
+
+                        let value = self.parse_expr()?;
+
+                        span.extend_with(&value.span);
+
+                        ExprKind::Assign(Assign {
+                            name,
+                            value: Box::new(value),
+                        })
+                    }
+                    _ => ExprKind::Var(name),
+                };
+
+                (kind, Eat::No)
+            }
             _ => {
+                let kind = self.next().unwrap().kind;
+
                 return Err(Error::UnexpectedToken {
                     expected: "expression".into(),
-                    actual: self.next().unwrap(),
-                })
+                    actual: Token { kind, span },
+                });
             }
         };
+
+        if let Eat::Yes = eat {
+            self.next().ok();
+        }
 
         Ok(Expr { id, span, kind })
     }
@@ -193,10 +254,10 @@ where
 impl BinOperator {
     pub fn precedence(&self) -> usize {
         match self {
-            Self::Or => 1,
-            Self::And => 2,
-            Self::Add | Self::Sub => 2,
-            Self::Mul | Self::Div => 3,
+            Self::Mul | Self::Div => 4,
+            Self::Add | Self::Sub => 3,
+            Self::Eq | Self::Ne | Self::Gt | Self::Gte | Self::Lt | Self::Lte => 2,
+            Self::Or | Self::And => 1,
         }
     }
 }

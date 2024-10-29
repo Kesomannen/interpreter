@@ -9,7 +9,7 @@ pub enum Error {
     #[error("unexpected end of input")]
     UnexpectedEof,
 
-    #[error("unexpected token: expected {expected}, got {actual:?}")]
+    #[error("unexpected token: expected {expected}, got '{actual}'")]
     UnexpectedToken {
         expected: Cow<'static, str>,
         actual: Token,

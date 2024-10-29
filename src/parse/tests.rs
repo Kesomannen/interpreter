@@ -5,6 +5,102 @@ use tokenize::{BinOperator, Delim, Keyword, TokenKind};
 use super::*;
 
 #[test]
+fn check_empty_block() {
+    assert_parse(
+        [
+            Token {
+                span: Span::new(0, 1),
+                kind: TokenKind::OpenDelim(Delim::Brace),
+            },
+            Token {
+                span: Span::new(1, 2),
+                kind: TokenKind::CloseDelim(Delim::Brace),
+            },
+        ],
+        |parser| parser.parse_block(),
+        (Block(Vec::new()), Span::new(0, 2)),
+    );
+}
+
+#[test]
+fn check_parse_block() {
+    assert_parse(
+        [
+            Token {
+                span: Span::new(0, 1),
+                kind: TokenKind::OpenDelim(Delim::Brace),
+            },
+            Token {
+                span: Span::new(1, 3),
+                kind: TokenKind::Ident("foo".into()),
+            },
+            Token {
+                span: Span::new(3, 4),
+                kind: TokenKind::Semicolon,
+            },
+            Token {
+                span: Span::new(4, 5),
+                kind: TokenKind::CloseDelim(Delim::Brace),
+            },
+        ],
+        |parser| parser.parse_block(),
+        (
+            Block(vec![Expr {
+                id: NodeId(0),
+                span: Span::new(1, 3),
+                kind: ExprKind::Var("foo".into()),
+            }]),
+            Span::new(0, 5),
+        ),
+    );
+}
+
+#[test]
+fn check_parse_if() {
+    assert_parse(
+        [
+            Token {
+                span: Span::new(0, 2),
+                kind: TokenKind::Keyword(Keyword::If),
+            },
+            Token {
+                span: Span::new(2, 3),
+                kind: TokenKind::OpenDelim(Delim::Paren),
+            },
+            Token {
+                span: Span::new(3, 7),
+                kind: TokenKind::Ident("condition".into()),
+            },
+            Token {
+                span: Span::new(7, 8),
+                kind: TokenKind::CloseDelim(Delim::Paren),
+            },
+            Token {
+                span: Span::new(8, 12),
+                kind: TokenKind::Ident("body".into()),
+            },
+        ],
+        |parser| parser.parse_expr(),
+        Expr {
+            id: NodeId(0),
+            span: Span::new(0, 12),
+            kind: ExprKind::If(If {
+                cond: Box::new(Expr {
+                    id: NodeId(1),
+                    span: Span::new(3, 7),
+                    kind: ExprKind::Var("condition".into()),
+                }),
+                body: Box::new(Expr {
+                    id: NodeId(2),
+                    span: Span::new(8, 12),
+                    kind: ExprKind::Var("body".into()),
+                }),
+            }),
+        },
+    );
+}
+
+#[test]
 fn check_parse_string() {
     assert_parse(
         [Token {
