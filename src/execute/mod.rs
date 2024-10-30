@@ -1,6 +1,6 @@
 use crate::{parse::ast::*, span::Span};
 use derive_more::derive::Display;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 mod error;
 mod func;
@@ -9,14 +9,39 @@ pub use error::{Error, Result};
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Executor {
+    scopes: Vec<Scope>,
+}
+
+impl Default for Executor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Default)]
+struct Scope {
     vars: HashMap<String, Value>,
 }
 
 impl Executor {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            scopes: vec![Scope::default()],
+        }
+    }
+
+    fn curr_scope(&self) -> &Scope {
+        self.scopes
+            .last()
+            .expect("the global scope should always be present")
+    }
+
+    fn curr_scope_mut(&mut self) -> &mut Scope {
+        self.scopes
+            .last_mut()
+            .expect("the global scope should always be present")
     }
 
     pub(crate) fn eval_expr(&mut self, expr: &Expr) -> Result<Value> {
@@ -25,12 +50,13 @@ impl Executor {
 
         match kind {
             ExprKind::String(str) => Ok(Value::String(str.clone())),
+            ExprKind::Func(func) => Ok(Value::Func(func.clone())),
             ExprKind::Int(int) => Ok(Value::Int(*int)),
             ExprKind::Bool(bool) => Ok(Value::Bool(*bool)),
             ExprKind::Call(call) => self.eval_call(call, span),
             ExprKind::BinOp(bin_op) => self.eval_bin_op(bin_op, span),
             ExprKind::Assign(assign) => self.eval_assign(assign),
-            ExprKind::Var(name) => self.eval_var(name, span),
+            ExprKind::Ident(name) => self.eval_var(name, span).cloned(),
             ExprKind::If(_if) => self.eval_if(_if, span),
             ExprKind::Block(block) => self.eval_block(block, span),
         }
@@ -74,14 +100,18 @@ impl Executor {
 
     fn eval_assign(&mut self, assign: &Assign) -> Result<Value> {
         let value = self.eval_expr(&assign.value)?;
-        self.vars.insert(assign.name.clone(), value);
+        self.curr_scope_mut()
+            .vars
+            .insert(assign.name.clone(), value);
+
         Ok(Value::Void)
     }
 
-    fn eval_var(&mut self, name: &str, span: Span) -> Result<Value> {
-        self.vars
-            .get(name)
-            .cloned()
+    fn eval_var<'a>(&'a mut self, name: &str, span: Span) -> Result<&'a Value> {
+        self.scopes
+            .iter()
+            .filter_map(|scope| scope.vars.get(name))
+            .last() // prioritize closer scopes
             .ok_or(Error::UndefinedVariable(name.to_owned(), span))
     }
 
@@ -125,6 +155,8 @@ pub enum Type {
     Int,
     #[display("bool")]
     Bool,
+    #[display("func")]
+    Func,
 }
 
 #[derive(Debug, Clone, Display, PartialEq)]
@@ -133,6 +165,7 @@ pub enum Value {
     String(String),
     Int(i32),
     Bool(bool),
+    Func(Arc<Func>),
 }
 
 impl Value {
@@ -142,6 +175,7 @@ impl Value {
             Value::String(_) => Type::String,
             Value::Int(_) => Type::Int,
             Value::Bool(_) => Type::Bool,
+            Value::Func(_) => Type::Func,
         }
     }
 }

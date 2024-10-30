@@ -48,7 +48,7 @@ fn check_parse_block() {
             Block(vec![Expr {
                 id: NodeId(0),
                 span: Span::new(1, 3),
-                kind: ExprKind::Var("foo".into()),
+                kind: ExprKind::Ident("foo".into()),
             }]),
             Span::new(0, 5),
         ),
@@ -88,12 +88,12 @@ fn check_parse_if() {
                 cond: Box::new(Expr {
                     id: NodeId(1),
                     span: Span::new(3, 7),
-                    kind: ExprKind::Var("condition".into()),
+                    kind: ExprKind::Ident("condition".into()),
                 }),
                 body: Box::new(Expr {
                     id: NodeId(2),
                     span: Span::new(8, 12),
-                    kind: ExprKind::Var("body".into()),
+                    kind: ExprKind::Ident("body".into()),
                 }),
                 branch: None,
             }),
@@ -188,9 +188,13 @@ fn check_parse_call() {
             id: NodeId(0),
             span: Span::new(0, 18),
             kind: ExprKind::Call(Call {
-                name: "print".into(),
-                args: vec![Expr {
+                func: Box::new(Expr {
                     id: NodeId(1),
+                    span: Span::new(0, 5),
+                    kind: ExprKind::Ident("print".into()),
+                }),
+                args: vec![Expr {
+                    id: NodeId(2),
                     span: Span::new(6, 17),
                     kind: ExprKind::String("hello, world".into()),
                 }],
@@ -243,7 +247,7 @@ fn check_parse_var() {
         Expr {
             id: NodeId(0),
             span: Span::new(0, 7),
-            kind: ExprKind::Var("foo_bar".into()),
+            kind: ExprKind::Ident("foo_bar".into()),
         },
     );
 }

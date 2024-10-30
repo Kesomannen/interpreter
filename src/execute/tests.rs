@@ -131,7 +131,7 @@ fn check_var() {
             .eval_expr(&Expr {
                 id: NodeId(0),
                 span: Span::default(),
-                kind: ExprKind::Var("foo".into()),
+                kind: ExprKind::Ident("foo".into()),
             })
             .unwrap(),
         Value::Int(7)
@@ -157,7 +157,7 @@ fn check_var() {
             .eval_expr(&Expr {
                 id: NodeId(0),
                 span: Span::default(),
-                kind: ExprKind::Var("foo".into()),
+                kind: ExprKind::Ident("foo".into()),
             })
             .unwrap(),
         Value::Int(77)

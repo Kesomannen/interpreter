@@ -27,6 +27,9 @@ pub enum Error {
         span: Span,
     },
 
+    #[error("tried to invoke an uninvokable type")]
+    CannotInvoke,
+
     #[error("process exited")]
     Exit,
 }

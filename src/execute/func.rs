@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::span::Span;
 
-use super::{Call, Error, Executor, Expr, Result, Type, Value};
+use super::{Call, Error, Executor, Expr, ExprKind, Result, Scope, Type, Value};
 
 struct Values<'a, 'b> {
     executor: &'a mut Executor,
@@ -107,9 +107,9 @@ tuple_from_values_impl!(T1, T2, T3, T4, T5, T6, T7);
 tuple_from_values_impl!(T1, T2, T3, T4, T5, T6, T7, T8);
 tuple_from_values_impl!(T1, T2, T3, T4, T5, T6, T7, T8, T9);
 
-type Func = Box<dyn Fn(Values) -> Result<Value>>;
+type Builtin = Box<dyn Fn(Values) -> Result<Value>>;
 
-fn f<A, F>(exec: F) -> Func
+fn f<A, F>(exec: F) -> Builtin
 where
     A: FromValues,
     F: Fn(A) -> Result<Value> + 'static,
@@ -119,7 +119,7 @@ where
 
 impl Executor {
     pub fn eval_call(&mut self, call: &Call, span: Span) -> Result<Value> {
-        let funcs: HashMap<&'static str, Func> = HashMap::from([
+        let builtins: HashMap<&'static str, Builtin> = HashMap::from([
             (
                 "print",
                 f(|text: Value| {
@@ -146,14 +146,43 @@ impl Executor {
             ("exit", f(|()| Err(Error::Exit))),
         ]);
 
-        let values = Values {
-            executor: self,
-            exprs: call.args.iter(),
-        };
+        if let Ok(Value::Func(func)) = self.eval_expr(&call.func) {
+            let expected = func.args.len();
+            let actual = call.args.len();
 
-        match funcs.get(call.name.as_str()) {
-            Some(func) => func(values),
-            None => Err(Error::UndefinedFunction(call.name.clone(), span)),
+            if actual != expected {
+                return Err(Error::ArgumentMismatch { expected, actual });
+            }
+
+            let vars = func
+                .args
+                .iter()
+                .cloned()
+                .zip(self.values(&call.args))
+                .map(|(name, value)| value.map(|value| (name, value)))
+                .collect::<Result<_>>()?;
+
+            self.scopes.push(Scope { vars });
+            let res = self.eval_expr(&func.body)?;
+            self.scopes.pop();
+
+            return Ok(res);
+        }
+
+        if let ExprKind::Ident(name) = &call.func.kind {
+            match builtins.get(name.as_str()) {
+                Some(func) => func(self.values(&call.args)),
+                None => Err(Error::UndefinedFunction(name.clone(), span)),
+            }
+        } else {
+            Err(Error::CannotInvoke)
+        }
+    }
+
+    fn values<'a, 'b>(&'a mut self, exprs: &'b [Expr]) -> Values<'a, 'b> {
+        Values {
+            executor: self,
+            exprs: exprs.iter(),
         }
     }
 }

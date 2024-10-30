@@ -28,6 +28,7 @@ fn check_tokenize_keywords() {
     assert_tokenize("false", [TokenKind::Keyword(Keyword::False)]);
     assert_tokenize("if", [TokenKind::Keyword(Keyword::If)]);
     assert_tokenize("else", [TokenKind::Keyword(Keyword::Else)]);
+    assert_tokenize("return", [TokenKind::Keyword(Keyword::Return)]);
 }
 
 #[test]
@@ -35,6 +36,7 @@ fn check_tokenize_symbols() {
     assert_tokenize(";", [TokenKind::Semicolon]);
     assert_tokenize(",", [TokenKind::Comma]);
     assert_tokenize("=", [TokenKind::Equals]);
+    assert_tokenize("|", [TokenKind::Pipe]);
 }
 
 #[test]

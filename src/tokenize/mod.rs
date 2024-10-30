@@ -37,6 +37,8 @@ pub enum TokenKind {
     Equals,
     #[display(",")]
     Comma,
+    #[display("|")]
+    Pipe,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -110,6 +112,7 @@ pub enum Keyword {
     False,
     If,
     Else,
+    Return,
 }
 
 pub struct Tokenizer<'a> {
@@ -179,13 +182,13 @@ impl<'a> Iterator for Tokenizer<'a> {
             ('-', _) => TokenKind::BinOperator(BinOperator::Sub),
             ('*', _) => TokenKind::BinOperator(BinOperator::Mul),
             ('/', _) => TokenKind::BinOperator(BinOperator::Div),
-            ('=', Some('=')) => {
-                self.next_char();
-                TokenKind::BinOperator(BinOperator::Eq)
-            }
             ('!', Some('=')) => {
                 self.next_char();
                 TokenKind::BinOperator(BinOperator::Ne)
+            }
+            ('=', Some('=')) => {
+                self.next_char();
+                TokenKind::BinOperator(BinOperator::Eq)
             }
             ('=', _) => TokenKind::Equals,
             ('<', Some('=')) => {
@@ -206,6 +209,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                 self.next_char();
                 TokenKind::BinOperator(BinOperator::Or)
             }
+            ('|', _) => TokenKind::Pipe,
             ('"', _) => {
                 let str = self.collect_while(None, |c| c != '"');
                 self.next_char(); // eat the close "
