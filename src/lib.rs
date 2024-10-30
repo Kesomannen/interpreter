@@ -8,11 +8,25 @@ use tokenize::tokenize;
 
 pub use execute::{Executor, Value};
 
+pub enum EvalMode {
+    Expr,
+    File,
+}
+
 impl Executor {
     pub fn eval(&mut self, src: &str) -> anyhow::Result<Value> {
-        let tokens = tokenize(src);
-        let expr = Parser::new(tokens).parse_expr()?;
-        let value = self.eval_expr(expr)?;
+        let expr = Parser::new(tokenize(src)).parse_expr()?;
+        let value = self.eval_expr(&expr)?;
         Ok(value)
+    }
+
+    pub fn exec(&mut self, src: &str) -> anyhow::Result<()> {
+        let exprs = Parser::new(tokenize(src)).parse_file()?;
+
+        for expr in &exprs {
+            self.eval_expr(expr)?;
+        }
+
+        Ok(())
     }
 }

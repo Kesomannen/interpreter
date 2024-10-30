@@ -61,6 +61,14 @@ where
             .map(|token| token.ok_or(Error::UnexpectedEof))?
     }
 
+    fn eat(&mut self) {
+        self.next()
+            .map_err(|err| {
+                eprintln!("a token error was eaten: {err}");
+            })
+            .ok();
+    }
+
     fn expect(&mut self, kind: &TokenKind) -> Result<Token> {
         let next = self.next()?;
         if next.kind == *kind {
@@ -115,11 +123,15 @@ where
         Ok((values, span))
     }
 
-    pub fn parse_block(&mut self) -> Result<(Block, Span)> {
-        let (exprs, span) =
-            self.parse_list(Delim::Brace, TokenKind::Semicolon, |this| this.parse_expr())?;
+    pub fn parse_file(&mut self) -> Result<Vec<Expr>> {
+        let mut exprs = Vec::new();
 
-        Ok((Block(exprs), span))
+        while self.peek_ok()?.is_some() {
+            exprs.push(self.parse_expr()?);
+            self.expect(&TokenKind::Semicolon)?;
+        }
+
+        Ok(exprs)
     }
 
     pub fn parse_expr(&mut self) -> Result<Expr> {
@@ -178,19 +190,11 @@ where
                 _ => unreachable!(),
             },
             TokenKind::Keyword(Keyword::If) => {
-                self.next().unwrap();
+                let _if = self.parse_if()?;
 
-                self.expect(&TokenKind::OpenDelim(Delim::Paren))?;
+                //span.extend_with(&body.span);
 
-                let cond = Box::new(self.parse_expr()?);
-
-                self.expect(&TokenKind::CloseDelim(Delim::Paren))?;
-
-                let body = Box::new(self.parse_expr()?);
-
-                span.extend_with(&body.span);
-
-                (ExprKind::If(If { cond, body }), Eat::No)
+                (ExprKind::If(_if), Eat::No)
             }
             TokenKind::OpenDelim(Delim::Brace) => {
                 let (block, block_span) = self.parse_block()?;
@@ -217,7 +221,7 @@ where
                         ExprKind::Call(Call { name, args })
                     }
                     Some(TokenKind::Equals) => {
-                        self.next().unwrap();
+                        self.eat();
 
                         let value = self.parse_expr()?;
 
@@ -248,6 +252,38 @@ where
         }
 
         Ok(Expr { id, span, kind })
+    }
+
+    fn parse_if(&mut self) -> Result<If> {
+        self.expect(&TokenKind::Keyword(Keyword::If))?;
+        self.expect(&TokenKind::OpenDelim(Delim::Paren))?;
+        let cond = Box::new(self.parse_expr()?);
+        self.expect(&TokenKind::CloseDelim(Delim::Paren))?;
+
+        let body = Box::new(self.parse_expr()?);
+
+        let branch = match self.peek_ok()?.map(|token| &token.kind) {
+            Some(TokenKind::Keyword(Keyword::Else)) => {
+                self.eat();
+
+                let branch = match self.peek_ok()?.map(|token| &token.kind) {
+                    Some(TokenKind::Keyword(Keyword::If)) => IfBranch::IfElse(self.parse_if()?),
+                    _ => IfBranch::Else(Box::new(self.parse_expr()?)),
+                };
+
+                Some(Box::new(branch))
+            }
+            _ => None,
+        };
+
+        Ok(If { cond, body, branch })
+    }
+
+    fn parse_block(&mut self) -> Result<(Block, Span)> {
+        let (exprs, span) =
+            self.parse_list(Delim::Brace, TokenKind::Semicolon, |this| this.parse_expr())?;
+
+        Ok((Block(exprs), span))
     }
 }
 

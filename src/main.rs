@@ -30,9 +30,7 @@ fn run_file(path: &Path) -> anyhow::Result<()> {
         .join(path);
 
     let str = fs::read_to_string(path).context("failed to read file")?;
-    eval_and_print(&mut Executor::new(), &str);
-
-    Ok(())
+    Executor::new().exec(&str)
 }
 
 fn run_interactive() -> anyhow::Result<()> {
@@ -53,19 +51,15 @@ fn run_interactive() -> anyhow::Result<()> {
             return Ok(());
         }
 
-        eval_and_print(&mut executor, &input);
-    }
-}
+        match executor.eval(&input) {
+            Ok(value) => {
+                if let Value::Void = value {
+                    continue;
+                }
 
-fn eval_and_print(executor: &mut Executor, src: &str) {
-    match executor.eval(src) {
-        Ok(value) => {
-            if let Value::Void = value {
-                return;
+                println!("{value}");
             }
-
-            println!("{value}");
+            Err(err) => println!("{err:#}"),
         }
-        Err(err) => println!("{err:#}"),
     }
 }

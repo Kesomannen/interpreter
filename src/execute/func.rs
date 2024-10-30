@@ -1,15 +1,15 @@
-use std::{borrow::Cow, collections::HashMap, vec};
+use std::collections::HashMap;
 
 use crate::span::Span;
 
 use super::{Call, Error, Executor, Expr, Result, Type, Value};
 
-struct Values<'a> {
+struct Values<'a, 'b> {
     executor: &'a mut Executor,
-    exprs: vec::IntoIter<Expr>,
+    exprs: std::slice::Iter<'b, Expr>,
 }
 
-impl Iterator for Values<'_> {
+impl Iterator for Values<'_, '_> {
     type Item = Result<Value>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -118,24 +118,24 @@ where
 }
 
 impl Executor {
-    pub fn eval_call(&mut self, call: Call, span: Span) -> Result<Value> {
-        let funcs: HashMap<Cow<'static, str>, Func> = HashMap::from([
+    pub fn eval_call(&mut self, call: &Call, span: Span) -> Result<Value> {
+        let funcs: HashMap<&'static str, Func> = HashMap::from([
             (
-                "print".into(),
+                "print",
                 f(|text: Value| {
                     print!("{text}");
                     Ok(Value::Void)
                 }),
             ),
             (
-                "println".into(),
+                "println",
                 f(|text: Value| {
                     println!("{text}");
                     Ok(Value::Void)
                 }),
             ),
             (
-                "input".into(),
+                "input",
                 f(|()| {
                     let mut str = String::new();
                     std::io::stdin().read_line(&mut str).ok();
@@ -143,16 +143,17 @@ impl Executor {
                     Ok(Value::String(str))
                 }),
             ),
+            ("exit", f(|()| Err(Error::Exit))),
         ]);
 
         let values = Values {
             executor: self,
-            exprs: call.args.into_iter(),
+            exprs: call.args.iter(),
         };
 
         match funcs.get(call.name.as_str()) {
             Some(func) => func(values),
-            None => Err(Error::UndefinedFunction(call.name, span)),
+            None => Err(Error::UndefinedFunction(call.name.clone(), span)),
         }
     }
 }

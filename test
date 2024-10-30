@@ -1,6 +1,0 @@
-{
-    🥞 = input();
-    if (🥞 == "balls") {
-        println("HOW DARE YOU");
-    };
-}

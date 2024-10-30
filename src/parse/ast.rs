@@ -46,6 +46,13 @@ pub struct Assign {
 pub struct If {
     pub cond: Box<Expr>,
     pub body: Box<Expr>,
+    pub branch: Option<Box<IfBranch>>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum IfBranch {
+    IfElse(If),
+    Else(Box<Expr>),
 }
 
 #[derive(Debug, PartialEq, Eq)]

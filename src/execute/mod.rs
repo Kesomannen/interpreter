@@ -19,13 +19,14 @@ impl Executor {
         Self::default()
     }
 
-    pub(crate) fn eval_expr(&mut self, expr: Expr) -> Result<Value> {
+    pub(crate) fn eval_expr(&mut self, expr: &Expr) -> Result<Value> {
         let Expr { span, kind, .. } = expr;
+        let span = span.clone();
 
         match kind {
-            ExprKind::String(str) => Ok(Value::String(str)),
-            ExprKind::Int(int) => Ok(Value::Int(int)),
-            ExprKind::Bool(bool) => Ok(Value::Bool(bool)),
+            ExprKind::String(str) => Ok(Value::String(str.clone())),
+            ExprKind::Int(int) => Ok(Value::Int(*int)),
+            ExprKind::Bool(bool) => Ok(Value::Bool(*bool)),
             ExprKind::Call(call) => self.eval_call(call, span),
             ExprKind::BinOp(bin_op) => self.eval_bin_op(bin_op, span),
             ExprKind::Assign(assign) => self.eval_assign(assign),
@@ -35,14 +36,14 @@ impl Executor {
         }
     }
 
-    fn eval_bin_op(&mut self, bin_op: BinOp, span: Span) -> Result<Value> {
+    fn eval_bin_op(&mut self, bin_op: &BinOp, span: Span) -> Result<Value> {
         use crate::tokenize::BinOperator::*;
         use Value::*;
 
         let BinOp { operator, lhs, rhs } = bin_op;
 
-        let lhs = self.eval_expr(*lhs)?;
-        let rhs = self.eval_expr(*rhs)?;
+        let lhs = self.eval_expr(lhs)?;
+        let rhs = self.eval_expr(rhs)?;
 
         let value = match (operator, lhs, rhs) {
             (Eq, lhs, rhs) => Bool(lhs == rhs),
@@ -58,11 +59,11 @@ impl Executor {
             (And, Bool(lhs), Bool(rhs)) => Bool(lhs && rhs),
             (Or, Bool(lhs), Bool(rhs)) => Bool(lhs || rhs),
             (Add, String(lhs), String(rhs)) => String(lhs + &rhs),
-            (operator, lhs, rhs) => {
+            (op, lhs, rhs) => {
                 return Err(Error::UnsupportedOp {
                     lhs: lhs.ty(),
                     rhs: rhs.ty(),
-                    operator,
+                    operator: *op,
                     span,
                 })
             }
@@ -71,33 +72,37 @@ impl Executor {
         Ok(value)
     }
 
-    fn eval_assign(&mut self, assign: Assign) -> Result<Value> {
-        let value = self.eval_expr(*assign.value)?;
-        self.vars.insert(assign.name, value);
+    fn eval_assign(&mut self, assign: &Assign) -> Result<Value> {
+        let value = self.eval_expr(&assign.value)?;
+        self.vars.insert(assign.name.clone(), value);
         Ok(Value::Void)
     }
 
-    fn eval_var(&mut self, name: String, span: Span) -> Result<Value> {
+    fn eval_var(&mut self, name: &str, span: Span) -> Result<Value> {
         self.vars
-            .get(&name)
+            .get(name)
             .cloned()
-            .ok_or(Error::UndefinedVariable(name, span))
+            .ok_or(Error::UndefinedVariable(name.to_owned(), span))
     }
 
-    fn eval_if(&mut self, _if: If, _span: Span) -> Result<Value> {
-        match self.eval_expr(*_if.cond)? {
-            Value::Bool(true) => self.eval_expr(*_if.body),
-            Value::Bool(false) => Ok(Value::Void),
-            expr => Err(Error::TypeMismatch {
+    fn eval_if(&mut self, _if: &If, _span: Span) -> Result<Value> {
+        match self.eval_expr(&_if.cond)? {
+            Value::Bool(true) => self.eval_expr(&_if.body),
+            Value::Bool(false) => match _if.branch.as_deref() {
+                Some(IfBranch::IfElse(_if)) => self.eval_if(_if, _span),
+                Some(IfBranch::Else(expr)) => self.eval_expr(expr),
+                None => Ok(Value::Void),
+            },
+            value => Err(Error::TypeMismatch {
                 expected: Type::Bool,
-                actual: expr,
+                actual: value,
             }),
         }
     }
 
-    fn eval_block(&mut self, block: Block, _span: Span) -> Result<Value> {
+    fn eval_block(&mut self, block: &Block, _span: Span) -> Result<Value> {
         let len = block.0.len();
-        for (i, expr) in block.0.into_iter().enumerate() {
+        for (i, expr) in block.0.iter().enumerate() {
             let result = self.eval_expr(expr)?;
 
             if i == len - 1 {

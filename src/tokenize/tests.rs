@@ -27,6 +27,7 @@ fn check_tokenize_keywords() {
     assert_tokenize("true", [TokenKind::Keyword(Keyword::True)]);
     assert_tokenize("false", [TokenKind::Keyword(Keyword::False)]);
     assert_tokenize("if", [TokenKind::Keyword(Keyword::If)]);
+    assert_tokenize("else", [TokenKind::Keyword(Keyword::Else)]);
 }
 
 #[test]

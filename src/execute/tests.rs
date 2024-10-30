@@ -110,7 +110,7 @@ fn check_eval_str_binop() {
 fn check_var() {
     let mut executor = Executor::new();
     let value = executor
-        .eval_expr(Expr {
+        .eval_expr(&Expr {
             id: NodeId(0),
             span: Span::default(),
             kind: ExprKind::Assign(Assign {
@@ -128,7 +128,7 @@ fn check_var() {
 
     assert_eq!(
         executor
-            .eval_expr(Expr {
+            .eval_expr(&Expr {
                 id: NodeId(0),
                 span: Span::default(),
                 kind: ExprKind::Var("foo".into()),
@@ -138,7 +138,7 @@ fn check_var() {
     );
 
     executor
-        .eval_expr(Expr {
+        .eval_expr(&Expr {
             id: NodeId(0),
             span: Span::default(),
             kind: ExprKind::Assign(Assign {
@@ -154,7 +154,7 @@ fn check_var() {
 
     assert_eq!(
         executor
-            .eval_expr(Expr {
+            .eval_expr(&Expr {
                 id: NodeId(0),
                 span: Span::default(),
                 kind: ExprKind::Var("foo".into()),
@@ -165,5 +165,5 @@ fn check_var() {
 }
 
 fn assert_eval(expr: Expr, expected: Value) {
-    assert_eq!(Executor::new().eval_expr(expr).unwrap(), expected);
+    assert_eq!(Executor::new().eval_expr(&expr).unwrap(), expected);
 }

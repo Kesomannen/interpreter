@@ -109,6 +109,7 @@ pub enum Keyword {
     True,
     False,
     If,
+    Else,
 }
 
 pub struct Tokenizer<'a> {

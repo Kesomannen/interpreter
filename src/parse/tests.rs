@@ -95,6 +95,7 @@ fn check_parse_if() {
                     span: Span::new(8, 12),
                     kind: ExprKind::Var("body".into()),
                 }),
+                branch: None,
             }),
         },
     );

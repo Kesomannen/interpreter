@@ -1,8 +1,6 @@
-use thiserror::Error;
-
-use crate::{span::Span, tokenize::BinOperator};
-
 use super::{Type, Value};
+use crate::{span::Span, tokenize::BinOperator};
+use thiserror::Error;
 
 #[derive(Debug, Error, Clone)]
 pub enum Error {
@@ -28,6 +26,9 @@ pub enum Error {
         operator: BinOperator,
         span: Span,
     },
+
+    #[error("process exited")]
+    Exit,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
