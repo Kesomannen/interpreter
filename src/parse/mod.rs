@@ -195,7 +195,7 @@ where
             self.next()?;
 
             let rhs = self._parse_expr(operator.precedence() + 1)?;
-            let span = Span::merge(lhs.span.clone(), rhs.span.clone());
+            let span = Span::merge(&lhs.span, &rhs.span);
 
             lhs = Expr {
                 id: self.next_id(),
@@ -294,7 +294,7 @@ where
             let (args, args_span) =
                 self.parse_list_delim(Delim::Paren, TokenKind::Comma, |this| this.parse_expr())?;
 
-            let span = Span::merge(expr.span.clone(), args_span);
+            let span = Span::merge(&expr.span, &args_span);
 
             Ok(Expr {
                 id: self.next_id(),
@@ -323,7 +323,7 @@ where
 
                 let branch = match self.peek_kind()? {
                     Some(TokenKind::Keyword(Keyword::If)) => IfBranch::IfElse(self.parse_if()?),
-                    _ => IfBranch::Else(self.parse_box_expr()?),
+                    _ => IfBranch::Else(self.parse_expr()?),
                 };
 
                 Some(Box::new(branch))

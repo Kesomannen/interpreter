@@ -9,7 +9,7 @@ impl Span {
         Self { start, end }
     }
 
-    pub fn merge(a: Span, b: Span) -> Self {
+    pub fn merge(a: &Span, b: &Span) -> Self {
         Self {
             start: a.start,
             end: b.end,

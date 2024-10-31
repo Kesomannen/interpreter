@@ -8,7 +8,7 @@ pub enum Error {
     UndefinedFunction(String, Span),
 
     #[error("undefined variable: {0}")]
-    UndefinedVariable(String, Span),
+    UndefinedVariable(String),
 
     #[error("type mismatch: expected a value of type {expected}, got {}", actual.ty())]
     TypeMismatch { expected: Type, actual: Value },

@@ -57,7 +57,7 @@ pub struct If {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum IfBranch {
     IfElse(If),
-    Else(Box<Expr>),
+    Else(Expr),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

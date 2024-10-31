@@ -146,7 +146,7 @@ impl Executor {
             ("exit", f(|()| Err(Error::Exit))),
         ]);
 
-        if let Ok(Value::Func(func)) = self.eval_expr(&call.func) {
+        if let Ok(Value::Func { func, captures }) = self.eval_expr(&call.func) {
             let expected = func.args.len();
             let actual = call.args.len();
 
@@ -160,11 +160,18 @@ impl Executor {
                 .cloned()
                 .zip(self.values(&call.args))
                 .map(|(name, value)| value.map(|value| (name, value)))
+                .chain(
+                    captures
+                        .iter()
+                        .map(|(name, value)| Ok((name.clone(), value.clone()))),
+                )
                 .collect::<Result<_>>()?;
 
+            println!("entering scope with vars {vars:#?}");
             self.scopes.push(Scope { vars });
             let res = self.eval_expr(&func.body)?;
             self.scopes.pop();
+            println!("exited scope");
 
             return Ok(res);
         }

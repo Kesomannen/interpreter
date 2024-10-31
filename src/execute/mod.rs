@@ -50,15 +50,15 @@ impl Executor {
 
         match kind {
             ExprKind::String(str) => Ok(Value::String(str.clone())),
-            ExprKind::Func(func) => Ok(Value::Func(func.clone())),
             ExprKind::Int(int) => Ok(Value::Int(*int)),
             ExprKind::Bool(bool) => Ok(Value::Bool(*bool)),
             ExprKind::Call(call) => self.eval_call(call, span),
             ExprKind::BinOp(bin_op) => self.eval_bin_op(bin_op, span),
             ExprKind::Assign(assign) => self.eval_assign(assign),
-            ExprKind::Ident(name) => self.eval_var(name, span).cloned(),
+            ExprKind::Ident(name) => self.eval_var(name).cloned(),
             ExprKind::If(_if) => self.eval_if(_if, span),
             ExprKind::Block(block) => self.eval_block(block, span),
+            ExprKind::Func(func) => self.eval_func(func, span),
         }
     }
 
@@ -107,12 +107,12 @@ impl Executor {
         Ok(Value::Void)
     }
 
-    fn eval_var<'a>(&'a mut self, name: &str, span: Span) -> Result<&'a Value> {
+    fn eval_var<'a>(&'a mut self, name: &str) -> Result<&'a Value> {
         self.scopes
             .iter()
             .filter_map(|scope| scope.vars.get(name))
             .last() // prioritize closer scopes
-            .ok_or(Error::UndefinedVariable(name.to_owned(), span))
+            .ok_or(Error::UndefinedVariable(name.to_owned()))
     }
 
     fn eval_if(&mut self, _if: &If, _span: Span) -> Result<Value> {
@@ -143,6 +143,58 @@ impl Executor {
         // block was empty
         Ok(Value::Void)
     }
+
+    fn eval_func(&mut self, func: &Arc<Func>, _span: Span) -> Result<Value> {
+        let mut captures = Vec::new();
+
+        self.visit(&func.body, func, &mut captures);
+
+        Ok(Value::Func {
+            func: func.clone(),
+            captures: captures.into(),
+        })
+    }
+
+    fn visit(&mut self, expr: &Expr, func: &Func, captures: &mut Vec<(String, Value)>) {
+        match &expr.kind {
+            ExprKind::Call(call) => {
+                self.visit(&call.func, func, captures);
+                for arg in &call.args {
+                    self.visit(arg, func, captures);
+                }
+            }
+            ExprKind::BinOp(bin_op) => {
+                self.visit(&bin_op.lhs, func, captures);
+                self.visit(&bin_op.rhs, func, captures);
+            }
+            ExprKind::Assign(assign) => {
+                self.visit(&assign.value, func, captures);
+            }
+            ExprKind::Ident(name) => {
+                if func.args.iter().any(|arg| arg == name) {
+                    return; // variable is an argument
+                }
+
+                if let Ok(var) = self.eval_var(name) {
+                    captures.push((name.to_owned(), var.clone()));
+                }
+            }
+            ExprKind::If(_if) => {
+                self.visit(&_if.cond, func, captures);
+                self.visit(&_if.body, func, captures);
+            }
+            ExprKind::Block(block) => {
+                for expr in &block.0 {
+                    self.visit(expr, func, captures);
+                }
+            }
+            ExprKind::Func(_) => {
+                println!("warn: scanned a function for captures!");
+                //self.visit(&f.body, func, captures);
+            }
+            _ => (),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
@@ -165,7 +217,11 @@ pub enum Value {
     String(String),
     Int(i32),
     Bool(bool),
-    Func(Arc<Func>),
+    #[display("<func>")]
+    Func {
+        func: Arc<Func>,
+        captures: Arc<[(String, Value)]>,
+    },
 }
 
 impl Value {
@@ -175,7 +231,7 @@ impl Value {
             Value::String(_) => Type::String,
             Value::Int(_) => Type::Int,
             Value::Bool(_) => Type::Bool,
-            Value::Func(_) => Type::Func,
+            Value::Func { .. } => Type::Func,
         }
     }
 }
