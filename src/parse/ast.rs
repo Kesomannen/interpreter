@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use derive_more::derive::Display;
 
-use crate::{span::Span, tokenize::BinOperator};
+use crate::{
+    span::Span,
+    tokenize::{BinOperator, UnOperator},
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct NodeId(pub usize);
@@ -21,11 +24,14 @@ pub enum ExprKind {
     Bool(bool),
     Call(Call),
     BinOp(BinOp),
+    UnOp(UnOp),
     Assign(Assign),
     Ident(String),
     If(If),
+    While(While),
     Block(Block),
     Func(Arc<Func>),
+    Void,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -42,6 +48,12 @@ pub struct BinOp {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct UnOp {
+    pub operator: UnOperator,
+    pub operand: Box<Expr>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Assign {
     pub name: String,
     pub value: Box<Expr>,
@@ -52,6 +64,12 @@ pub struct If {
     pub cond: Box<Expr>,
     pub body: Box<Expr>,
     pub branch: Option<Box<IfBranch>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct While {
+    pub cond: Box<Expr>,
+    pub body: Box<Expr>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Context;
 use clap::Parser;
-use interpreter::{Executor, Value};
+use interpreter::Executor;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -30,7 +30,9 @@ fn run_file(path: &Path) -> anyhow::Result<()> {
         .join(path);
 
     let str = fs::read_to_string(path).context("failed to read file")?;
-    Executor::new().exec(&str)
+    Executor::new().exec(&str)?;
+
+    Ok(())
 }
 
 fn run_interactive() -> anyhow::Result<()> {
@@ -52,13 +54,7 @@ fn run_interactive() -> anyhow::Result<()> {
         }
 
         match executor.eval(&input) {
-            Ok(value) => {
-                if let Value::Void = value {
-                    continue;
-                }
-
-                println!("{value}");
-            }
+            Ok(value) => println!("{value}"),
             Err(err) => println!("{err:#}"),
         }
     }

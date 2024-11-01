@@ -82,16 +82,16 @@ fn check_parse_if() {
         ],
         |parser| parser.parse_expr(),
         Expr {
-            id: NodeId(0),
+            id: NodeId(2),
             span: Span::new(0, 12),
             kind: ExprKind::If(If {
                 cond: Box::new(Expr {
-                    id: NodeId(1),
+                    id: NodeId(0),
                     span: Span::new(3, 7),
                     kind: ExprKind::Ident("condition".into()),
                 }),
                 body: Box::new(Expr {
-                    id: NodeId(2),
+                    id: NodeId(1),
                     span: Span::new(8, 12),
                     kind: ExprKind::Ident("body".into()),
                 }),
@@ -185,16 +185,16 @@ fn check_parse_call() {
         ],
         |parser| parser.parse_expr(),
         Expr {
-            id: NodeId(0),
+            id: NodeId(2),
             span: Span::new(0, 18),
             kind: ExprKind::Call(Call {
                 func: Box::new(Expr {
-                    id: NodeId(1),
+                    id: NodeId(0),
                     span: Span::new(0, 5),
                     kind: ExprKind::Ident("print".into()),
                 }),
                 args: vec![Expr {
-                    id: NodeId(2),
+                    id: NodeId(1),
                     span: Span::new(6, 17),
                     kind: ExprKind::String("hello, world".into()),
                 }],
@@ -222,12 +222,12 @@ fn check_parse_assign() {
         ],
         |parser| parser.parse_expr(),
         Expr {
-            id: NodeId(0),
+            id: NodeId(1),
             span: Span::new(0, 5),
             kind: ExprKind::Assign(Assign {
                 name: "foo".into(),
                 value: Box::new(Expr {
-                    id: NodeId(1),
+                    id: NodeId(0),
                     span: Span::new(4, 5),
                     kind: ExprKind::Int(7),
                 }),
@@ -262,7 +262,7 @@ fn check_parse_binop() {
             },
             Token {
                 span: Span::new(2, 3),
-                kind: TokenKind::BinOperator(BinOperator::Sub),
+                kind: TokenKind::Hyphen,
             },
             Token {
                 span: Span::new(3, 5),
@@ -270,7 +270,7 @@ fn check_parse_binop() {
             },
             Token {
                 span: Span::new(5, 6),
-                kind: TokenKind::BinOperator(BinOperator::Div),
+                kind: TokenKind::Slash,
             },
             Token {
                 span: Span::new(6, 7),

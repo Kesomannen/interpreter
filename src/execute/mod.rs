@@ -1,5 +1,6 @@
 use crate::{parse::ast::*, span::Span};
 use derive_more::derive::Display;
+use func::RuntimeFunc;
 use std::{collections::HashMap, sync::Arc};
 
 mod error;
@@ -25,13 +26,30 @@ struct Scope {
     vars: HashMap<String, Value>,
 }
 
+impl Scope {
+    fn builtin() -> Self {
+        let vars = func::builtins()
+            .into_iter()
+            .map(|builtin| {
+                (
+                    builtin.name().to_owned(),
+                    Value::Func(RuntimeFunc::Builtin(builtin)),
+                )
+            })
+            .collect();
+
+        Self { vars }
+    }
+}
+
 impl Executor {
     pub fn new() -> Self {
         Self {
-            scopes: vec![Scope::default()],
+            scopes: vec![Scope::builtin(), Scope::default()],
         }
     }
 
+    #[allow(unused)]
     fn curr_scope(&self) -> &Scope {
         self.scopes
             .last()
@@ -52,11 +70,14 @@ impl Executor {
             ExprKind::String(str) => Ok(Value::String(str.clone())),
             ExprKind::Int(int) => Ok(Value::Int(*int)),
             ExprKind::Bool(bool) => Ok(Value::Bool(*bool)),
+            ExprKind::Void => Ok(Value::Void),
             ExprKind::Call(call) => self.eval_call(call, span),
             ExprKind::BinOp(bin_op) => self.eval_bin_op(bin_op, span),
+            ExprKind::UnOp(un_op) => self.eval_un_op(un_op, span),
             ExprKind::Assign(assign) => self.eval_assign(assign),
             ExprKind::Ident(name) => self.eval_var(name).cloned(),
             ExprKind::If(_if) => self.eval_if(_if, span),
+            ExprKind::While(_while) => self.eval_while(_while, span),
             ExprKind::Block(block) => self.eval_block(block, span),
             ExprKind::Func(func) => self.eval_func(func, span),
         }
@@ -86,9 +107,32 @@ impl Executor {
             (Or, Bool(lhs), Bool(rhs)) => Bool(lhs || rhs),
             (Add, String(lhs), String(rhs)) => String(lhs + &rhs),
             (op, lhs, rhs) => {
-                return Err(Error::UnsupportedOp {
+                return Err(Error::UnsupportedBinOp {
                     lhs: lhs.ty(),
                     rhs: rhs.ty(),
+                    operator: *op,
+                    span,
+                })
+            }
+        };
+
+        Ok(value)
+    }
+
+    fn eval_un_op(&mut self, un_op: &UnOp, span: Span) -> Result<Value> {
+        use crate::tokenize::UnOperator::*;
+        use Value::*;
+
+        let UnOp { operator, operand } = un_op;
+
+        let operand = self.eval_expr(operand)?;
+
+        let value = match (operator, operand) {
+            (Not, Bool(bool)) => Bool(!bool),
+            (Neg, Int(int)) => Int(-int),
+            (op, operand) => {
+                return Err(Error::UnsupportedUnOp {
+                    operand: operand.ty(),
                     operator: *op,
                     span,
                 })
@@ -125,9 +169,28 @@ impl Executor {
             },
             value => Err(Error::TypeMismatch {
                 expected: Type::Bool,
-                actual: value,
+                actual: value.ty(),
             }),
         }
+    }
+
+    fn eval_while(&mut self, _while: &While, _span: Span) -> Result<Value> {
+        loop {
+            match self.eval_expr(&_while.cond)? {
+                Value::Bool(true) => (),
+                Value::Bool(false) => break,
+                value => {
+                    return Err(Error::TypeMismatch {
+                        expected: Type::Bool,
+                        actual: value.ty(),
+                    })
+                }
+            };
+
+            self.eval_expr(&_while.body)?;
+        }
+
+        Ok(Value::Void)
     }
 
     fn eval_block(&mut self, block: &Block, _span: Span) -> Result<Value> {
@@ -149,10 +212,10 @@ impl Executor {
 
         self.visit(&func.body, func, &mut captures);
 
-        Ok(Value::Func {
+        Ok(Value::Func(RuntimeFunc::User {
             func: func.clone(),
             captures: captures.into(),
-        })
+        }))
     }
 
     fn visit(&mut self, expr: &Expr, func: &Func, captures: &mut Vec<(String, Value)>) {
@@ -188,10 +251,7 @@ impl Executor {
                     self.visit(expr, func, captures);
                 }
             }
-            ExprKind::Func(_) => {
-                println!("warn: scanned a function for captures!");
-                //self.visit(&f.body, func, captures);
-            }
+            ExprKind::Func(_) => (), // higher depth-capturing is not supported
             _ => (),
         }
     }
@@ -213,15 +273,12 @@ pub enum Type {
 
 #[derive(Debug, Clone, Display, PartialEq)]
 pub enum Value {
+    #[display("void")]
     Void,
     String(String),
     Int(i32),
     Bool(bool),
-    #[display("<func>")]
-    Func {
-        func: Arc<Func>,
-        captures: Arc<[(String, Value)]>,
-    },
+    Func(RuntimeFunc),
 }
 
 impl Value {

@@ -8,7 +8,7 @@ pub use error::{Error, Result};
 
 use crate::{
     span::Span,
-    tokenize::{self, BinOperator, Delim, Keyword, Token, TokenKind},
+    tokenize::{self, BinOperator, Delim, Keyword, Token, TokenKind, UnOperator},
 };
 
 #[cfg(test)]
@@ -184,7 +184,7 @@ where
 
         loop {
             let Some(next) = self.peek_ok()? else { break };
-            let TokenKind::BinOperator(operator) = next.kind else {
+            let Some(operator) = BinOperator::from_token(&next.kind) else {
                 break;
             };
 
@@ -192,7 +192,7 @@ where
                 break;
             }
 
-            self.next()?;
+            self.eat();
 
             let rhs = self._parse_expr(operator.precedence() + 1)?;
             let span = Span::merge(&lhs.span, &rhs.span);
@@ -212,7 +212,21 @@ where
     }
 
     fn parse_simple_expr(&mut self) -> Result<Expr> {
-        let id = self.next_id();
+        let mut un_ops = Vec::new();
+
+        loop {
+            let Some(next) = self.peek_kind()? else {
+                break;
+            };
+
+            if let Some(op) = UnOperator::from_token(&next) {
+                un_ops.push(op);
+                self.eat();
+                continue;
+            }
+
+            break;
+        }
 
         let Token { kind, span } = self.peek()?;
         let mut span = span.clone();
@@ -226,6 +240,7 @@ where
             TokenKind::Int(int) => (ExprKind::Int(*int), Eat::Yes),
             TokenKind::Keyword(Keyword::True) => (ExprKind::Bool(true), Eat::Yes),
             TokenKind::Keyword(Keyword::False) => (ExprKind::Bool(false), Eat::Yes),
+            TokenKind::Keyword(Keyword::Void) => (ExprKind::Void, Eat::Yes),
             TokenKind::String(_) => match self.next().map(|token| token.kind) {
                 Ok(TokenKind::String(str)) => (ExprKind::String(str), Eat::No),
                 _ => unreachable!(),
@@ -236,6 +251,13 @@ where
                 span.extend_with(&_if.body.span);
 
                 (ExprKind::If(_if), Eat::No)
+            }
+            TokenKind::Keyword(Keyword::While) => {
+                let (cond, body) = self.parse_stmt(Keyword::While)?;
+
+                span.extend_with(&body.span);
+
+                (ExprKind::While(While { cond, body }), Eat::No)
             }
             TokenKind::OpenDelim(Delim::Brace) => {
                 let (block, block_span) = self.parse_block()?;
@@ -288,34 +310,44 @@ where
             self.eat();
         }
 
-        let expr = Expr { id, span, kind };
+        let mut expr = Expr {
+            id: self.next_id(),
+            span: span.clone(),
+            kind,
+        };
 
-        if let Some(TokenKind::OpenDelim(Delim::Paren)) = self.peek_kind()? {
+        while let Some(TokenKind::OpenDelim(Delim::Paren)) = self.peek_kind()? {
             let (args, args_span) =
                 self.parse_list_delim(Delim::Paren, TokenKind::Comma, |this| this.parse_expr())?;
 
             let span = Span::merge(&expr.span, &args_span);
 
-            Ok(Expr {
+            expr = Expr {
                 id: self.next_id(),
                 span,
                 kind: ExprKind::Call(Call {
                     func: Box::new(expr),
                     args,
                 }),
-            })
-        } else {
-            Ok(expr)
+            }
         }
+
+        for un_op in un_ops.into_iter().rev() {
+            expr = Expr {
+                id: self.next_id(),
+                span: span.clone(),
+                kind: ExprKind::UnOp(UnOp {
+                    operator: un_op,
+                    operand: Box::new(expr),
+                }),
+            }
+        }
+
+        Ok(expr)
     }
 
     fn parse_if(&mut self) -> Result<If> {
-        self.expect(&TokenKind::Keyword(Keyword::If))?;
-        self.expect(&TokenKind::OpenDelim(Delim::Paren))?;
-        let cond = self.parse_box_expr()?;
-        self.expect(&TokenKind::CloseDelim(Delim::Paren))?;
-
-        let body = self.parse_box_expr()?;
+        let (cond, body) = self.parse_stmt(Keyword::If)?;
 
         let branch = match self.peek_kind()? {
             Some(TokenKind::Keyword(Keyword::Else)) => {
@@ -332,6 +364,20 @@ where
         };
 
         Ok(If { cond, body, branch })
+    }
+
+    fn parse_stmt(&mut self, keyword: Keyword) -> Result<(Box<Expr>, Box<Expr>)> {
+        self.expect(&TokenKind::Keyword(keyword))?;
+
+        self.expect(&TokenKind::OpenDelim(Delim::Paren))?;
+
+        let cond = self.parse_box_expr()?;
+
+        self.expect(&TokenKind::CloseDelim(Delim::Paren))?;
+
+        let body = self.parse_box_expr()?;
+
+        Ok((cond, body))
     }
 
     fn parse_block(&mut self) -> Result<(Block, Span)> {

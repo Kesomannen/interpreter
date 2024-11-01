@@ -30,21 +30,43 @@ pub enum TokenKind {
     OpenDelim(Delim),
     #[display("{}", _0.to_str(false))]
     CloseDelim(Delim),
-    BinOperator(BinOperator),
     #[display(";")]
     Semicolon,
     #[display("=")]
     Equals,
     #[display(",")]
     Comma,
+    #[display("!")]
+    Bang,
     #[display("|")]
     Pipe,
+    #[display("+")]
+    Plus,
+    #[display("-")]
+    Hyphen,
+    #[display("*")]
+    Star,
+    #[display("/")]
+    Slash,
+    #[display("||")]
+    Or,
+    #[display("&&")]
+    And,
+    #[display("==")]
+    Eq,
+    #[display("!=")]
+    Ne,
+    #[display(">=")]
+    Gte,
+    #[display("<=")]
+    Lte,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Delim {
     Paren,
     Brace,
+    Angle,
 }
 
 impl Delim {
@@ -54,6 +76,8 @@ impl Delim {
             (Delim::Paren, false) => ")",
             (Delim::Brace, true) => "{",
             (Delim::Brace, false) => "}",
+            (Delim::Angle, true) => "<",
+            (Delim::Angle, false) => ">",
         }
     }
 }
@@ -87,6 +111,24 @@ pub enum BinOperator {
 }
 
 impl BinOperator {
+    pub fn from_token(token: &TokenKind) -> Option<Self> {
+        Some(match token {
+            TokenKind::Plus => Self::Add,
+            TokenKind::Hyphen => Self::Sub,
+            TokenKind::Star => Self::Mul,
+            TokenKind::Slash => Self::Div,
+            TokenKind::Or => Self::Or,
+            TokenKind::And => Self::And,
+            TokenKind::Eq => Self::Eq,
+            TokenKind::Ne => Self::Ne,
+            TokenKind::OpenDelim(Delim::Angle) => Self::Lt,
+            TokenKind::Gte => Self::Gte,
+            TokenKind::CloseDelim(Delim::Angle) => Self::Gt,
+            TokenKind::Lte => Self::Lte,
+            _ => return None,
+        })
+    }
+
     pub fn verb(&self) -> &'static str {
         match self {
             BinOperator::Add => "add",
@@ -105,6 +147,31 @@ impl BinOperator {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
+pub enum UnOperator {
+    #[display("!")]
+    Not,
+    #[display("-")]
+    Neg,
+}
+
+impl UnOperator {
+    pub fn from_token(token: &TokenKind) -> Option<Self> {
+        Some(match token {
+            TokenKind::Bang => Self::Not,
+            TokenKind::Hyphen => Self::Neg,
+            _ => return None,
+        })
+    }
+
+    pub fn verb(&self) -> &'static str {
+        match self {
+            UnOperator::Not => "invert",
+            UnOperator::Neg => "negate",
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, EnumString, strum_macros::Display)]
 #[strum(serialize_all = "camelCase")]
 pub enum Keyword {
@@ -112,7 +179,8 @@ pub enum Keyword {
     False,
     If,
     Else,
-    Return,
+    Void,
+    While,
 }
 
 pub struct Tokenizer<'a> {
@@ -178,36 +246,37 @@ impl<'a> Iterator for Tokenizer<'a> {
             (')', _) => TokenKind::CloseDelim(Delim::Paren),
             ('{', _) => TokenKind::OpenDelim(Delim::Brace),
             ('}', _) => TokenKind::CloseDelim(Delim::Brace),
-            ('+', _) => TokenKind::BinOperator(BinOperator::Add),
-            ('-', _) => TokenKind::BinOperator(BinOperator::Sub),
-            ('*', _) => TokenKind::BinOperator(BinOperator::Mul),
-            ('/', _) => TokenKind::BinOperator(BinOperator::Div),
+            ('+', _) => TokenKind::Plus,
+            ('-', _) => TokenKind::Hyphen,
+            ('*', _) => TokenKind::Star,
+            ('/', _) => TokenKind::Slash,
             ('!', Some('=')) => {
                 self.next_char();
-                TokenKind::BinOperator(BinOperator::Ne)
+                TokenKind::Ne
             }
+            ('!', _) => TokenKind::Bang,
             ('=', Some('=')) => {
                 self.next_char();
-                TokenKind::BinOperator(BinOperator::Eq)
+                TokenKind::Eq
             }
             ('=', _) => TokenKind::Equals,
             ('<', Some('=')) => {
                 self.next_char();
-                TokenKind::BinOperator(BinOperator::Lte)
+                TokenKind::Lte
             }
-            ('<', _) => TokenKind::BinOperator(BinOperator::Lt),
+            ('<', _) => TokenKind::OpenDelim(Delim::Angle),
             ('>', Some('=')) => {
                 self.next_char();
-                TokenKind::BinOperator(BinOperator::Gte)
+                TokenKind::Gte
             }
-            ('>', _) => TokenKind::BinOperator(BinOperator::Gt),
+            ('>', _) => TokenKind::CloseDelim(Delim::Angle),
             ('&', Some('&')) => {
                 self.next_char();
-                TokenKind::BinOperator(BinOperator::And)
+                TokenKind::And
             }
             ('|', Some('|')) => {
                 self.next_char();
-                TokenKind::BinOperator(BinOperator::Or)
+                TokenKind::Or
             }
             ('|', _) => TokenKind::Pipe,
             ('"', _) => {

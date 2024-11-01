@@ -43,8 +43,6 @@ num = { 2 + 3 } * 5; // 25
 Call a function with `name(<args>)`
 
 ```
-// using builtins
-
 name = input();
 println("Hello " + name);
 ```
@@ -54,6 +52,17 @@ Create a function with `|<args>| <body>`:
 ```
 double = |x| x * 2;
 double(4); // 8
+```
+
+Functions can return functions as well as capture the environment:
+
+```
+multiply_by = |factor| {
+    |x| x * factor; // captures factor
+};
+
+triple = multiply_by(3);
+triple(5); // 15
 ```
 
 Run conditional code with `if` and `else`:
